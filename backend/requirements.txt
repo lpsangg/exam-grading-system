@@ -1,0 +1,20 @@
+fastapi
+uvicorn
+werkzeug
+pandas
+numpy
+opencv-python
+matplotlib
+pillow
+transformers  # Required for TrOCR fallback
+fuzzywuzzy
+pytesseract
+easyocr
+ultralytics
+python-multipart
+torch  # Required for TrOCR fallback
+# qwen-vl-utils  # Commented out - using Ollama instead
+# accelerate  # Commented out - using Ollama instead
+requests 
+openpyxl
+ollama  # Added for Ollama support
