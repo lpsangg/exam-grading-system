@@ -563,9 +563,10 @@ def calculate_score(answers, df_key, exam_code):
 
         # Tìm index của row có mã đề khớp
         matching_row_index = None
-        for idx, val in enumerate(first_column):
+        for idx in df_key.index:
+            val = df_key.iloc[df_key.index.get_loc(idx), 0]  # Lấy giá trị cột đầu tiên
             if pd.notna(val) and str(val).strip().replace('.0', '') == exam_code:
-                matching_row_index = idx
+                matching_row_index = df_key.index.get_loc(idx)  # Lấy vị trí iloc
                 break
         
         if matching_row_index is None:

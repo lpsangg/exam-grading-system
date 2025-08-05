@@ -14,9 +14,15 @@ from utils.detectCodeBox import detect_code_box
 from utils.detectInfo import detect_name_student, detect_id_student, detect_index_student
 from utils.detectGrade import predict_grade
 from utils.automatic_exam_grading import calculate_score
+from utils.student_validation import validate_and_correct_student_info
 # Nếu cần giữ detect_index_student, overlay_image, copy_to_static thì import riêng
 from utils.processing_result_file import process_df_key, process_df_student
 pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+
+def normalize_path(path):
+    """Normalize path separators to forward slashes for web compatibility"""
+    return path.replace("\\", "/")
+
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -254,13 +260,16 @@ async def process_images(request: Request):
             # Chuyển đổi JSON thành DataFrame
             df_parts = {}
             for key, data in df_parts_data.items():
-                df_parts[key] = pd.DataFrame(data)
+                df = pd.DataFrame(data)
+                df = df.reset_index(drop=True)  # Reset index để đảm bảo index là số nguyên
+                df_parts[key] = df
             
             logger.info(f"Loaded df_parts from JSON: {list(df_parts.keys())}")
             
             # Log chi tiết từng part
             for part_name, df in df_parts.items():
-                logger.info(f"Part '{part_name}': shape={df.shape}, columns={list(df.columns)}")
+                logger.info(f"Part '{part_name}': shape={df.shape}, columns={list(df.columns)}, index_type={type(df.index[0]) if len(df) > 0 else 'empty'}")
+                logger.info(f"Part '{part_name}' first few rows: {df.head(2).to_dict()}")
                 
         except Exception as e:
             logger.error(f"Error reading df_parts file: {e}")
@@ -352,13 +361,32 @@ async def process_images(request: Request):
                 id_student_path = paths.get('id_student', os.path.join(temp_dir, 'id_student.jpg'))
                 index_student_path = paths.get('index_student', os.path.join(temp_dir, 'index_student.jpg'))
                 
-                logger.info(f"Processing paths: code_box={code_box_path}, name={name_student_path}, grading={grading_path}")
+                logger.info(f"Processing paths: code_box={normalize_path(code_box_path)}, name={normalize_path(name_student_path)}, grading={normalize_path(grading_path)}")
                 
-                # Detect thông tin từ các vùng ảnh
+                # Detect thông tin từ các vùng ảnh (raw detection)
                 exam_code = detect_code_box(code_box_path)
-                name_student = detect_name_student(name_student_path, student_names)
-                id_student = detect_id_student(id_student_path, student_ids)
-                index_student = detect_index_student(index_student_path)
+                raw_name = detect_name_student(name_student_path, student_names)
+                raw_id = detect_id_student(id_student_path, student_ids)
+                raw_index = detect_index_student(index_student_path)
+                path_image, student_result = predict_grade(grading_path)
+                
+                # Lấy STT đầu tiên nếu có
+                raw_stt = raw_index[0] if raw_index else None
+                
+                # Validate và correct thông tin sinh viên
+                validation_result = validate_and_correct_student_info(
+                    detected_name=raw_name,
+                    detected_mssv=raw_id,
+                    detected_stt=raw_stt,
+                    df_students=df_part
+                )
+                
+                # Lấy thông tin đã được correct
+                corrected_name = validation_result['name']
+                corrected_mssv = validation_result['mssv']
+                corrected_stt = validation_result['stt']
+                correction_status = validation_result['status']
+                correction_reason = validation_result['correction_reason']
                 path_image, student_result = predict_grade(grading_path)
                 
                 # Kiểm tra kết quả chấm điểm
@@ -380,25 +408,33 @@ async def process_images(request: Request):
                 # Kiểm tra có vấn đề gì không
                 has_issue = (
                     exam_code not in [str(idx).replace('.0', '') for idx in df_key.index] or 
-                    not name_student or 
-                    not id_student or 
-                    not index_student
+                    not corrected_name or 
+                    not corrected_mssv or 
+                    not corrected_stt or
+                    correction_status != 'exact_match'
                 )
                 
                 student = {
-                    'id': id_student,
-                    'name': name_student,
+                    'id': corrected_mssv,
+                    'name': corrected_name,
                     'testVariant': exam_code,
                     'score': score,
                     'answers': answers,
-                    'image': image_filename,
+                    'image': normalize_path(image_filename),
                     'has_issue': has_issue,
                     'num_questions': num_questions,
-                    'index_student': index_student or 'N/A'
+                    'index_student': corrected_stt or 'N/A',
+                    'correction_status': correction_status,
+                    'correction_reason': correction_reason,
+                    'raw_detection': {
+                        'name': raw_name,
+                        'mssv': raw_id,
+                        'stt': raw_stt
+                    }
                 }
                 
                 students.append(student)
-                if name_student and id_student and index_student and score is not None and score > 0:
+                if corrected_name and corrected_mssv and corrected_stt and score is not None and score > 0:
                     successful_recognitions += 1
                     
             except Exception as e:

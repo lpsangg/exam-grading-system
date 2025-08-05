@@ -8,6 +8,7 @@ matplotlib
 pillow
 transformers  # Required for TrOCR fallback
 fuzzywuzzy
+python-levenshtein  # Improves fuzzywuzzy performance
 pytesseract
 easyocr
 ultralytics

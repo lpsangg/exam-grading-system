@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BarChart3, Edit, CheckCircle, AlertTriangle, Eye } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { BarChart3, Edit, CheckCircle, AlertTriangle, Eye, Info, X } from "lucide-react"
 import { StepNavigation } from "@/components/step-navigation"
 import { toast } from "sonner"
 import Image from "next/image"
@@ -27,6 +28,13 @@ interface ExamResult {
   indexStudent?: string
   answers?: string[]
   numQuestions?: number
+  correctionStatus?: 'exact_match' | 'auto_corrected' | 'no_match'
+  correctionReason?: string
+  rawDetection?: {
+    name: string
+    mssv: string
+    stt: string
+  }
 }
 
 export default function Step4Page() {
@@ -61,14 +69,38 @@ export default function Step4Page() {
     studentId: "",
     examCode: "",
     name: "",
+    answers: [] as string[],
   })
 
   const handleEdit = (result: ExamResult) => {
     setEditingResult(result)
+    // Đảm bảo mảng answers có đúng độ dài
+    const numQuestions = result.numQuestions || 40 // default 40 questions
+    const answers = result.answers || []
+    const paddedAnswers = [...answers]
+    while (paddedAnswers.length < numQuestions) {
+      paddedAnswers.push("")
+    }
+    
     setEditForm({
       studentId: result.recognizedStudentId,
       examCode: result.recognizedExamCode,
       name: result.name || "",
+      answers: paddedAnswers.slice(0, numQuestions), // Cắt về đúng số câu
+    })
+  }
+
+  const handleAnswerChange = (questionIndex: number) => {
+    const currentAnswer = editForm.answers[questionIndex] || ""
+    const answerOptions = ["A", "B", "C", "D", "X"]
+    const currentIndex = answerOptions.indexOf(currentAnswer)
+    const nextIndex = (currentIndex + 1) % answerOptions.length
+    const newAnswer = answerOptions[nextIndex]
+    
+    setEditForm(prev => {
+      const newAnswers = [...prev.answers]
+      newAnswers[questionIndex] = newAnswer
+      return { ...prev, answers: newAnswers }
     })
   }
 
@@ -88,6 +120,7 @@ export default function Step4Page() {
                 recognizedStudentId: editForm.studentId,
                 recognizedExamCode: editForm.examCode,
                 name: editForm.name,
+                answers: editForm.answers,
                 status: "success", // Assuming mockStudents is removed, so always success for now
               }
             : result,
@@ -206,24 +239,89 @@ export default function Step4Page() {
                 </TableHeader>
                 <TableBody>
                   {results.map((result, idx) => (
-                    <TableRow key={`${result.id}-${result.imageName}-${idx}`} className={result.status === "warning" ? "bg-yellow-50" : ""}>
+                    <TableRow key={`${result.id}-${result.imageName}-${idx}`} className={
+                      result.correctionStatus === 'exact_match' ? '' :
+                      result.correctionStatus === 'auto_corrected' ? 'bg-yellow-50' :
+                      'bg-red-50'
+                    }>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          {getStatusIcon(result.status)}
+                          {result.correctionStatus === 'exact_match' && (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          )}
+                          {result.correctionStatus === 'auto_corrected' && (
+                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                          )}
+                          {result.correctionStatus === 'no_match' && (
+                            <X className="h-4 w-4 text-red-500" />
+                          )}
                           <span className="font-mono text-sm">{result.imageName}</span>
                         </div>
                       </TableCell>
-                      <TableCell>{result.name || 'Chưa nhận diện'}</TableCell>
-                      <TableCell className="font-mono">{result.recognizedStudentId}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{result.name || 'Chưa nhận diện'}</div>
+                          {result.correctionStatus === 'auto_corrected' && result.rawDetection && (
+                            <div className="text-xs text-gray-500">
+                              Gốc: {result.rawDetection.name}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-mono">{result.recognizedStudentId}</div>
+                          {result.correctionStatus === 'auto_corrected' && result.rawDetection && (
+                            <div className="text-xs text-gray-500">
+                              Gốc: {result.rawDetection.mssv}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell className="font-mono">{result.recognizedExamCode}</TableCell>
-                      <TableCell>{result.indexStudent || 'N/A'}</TableCell>
+                      <TableCell>
+                        <div>
+                          <div>{result.indexStudent || 'N/A'}</div>
+                          {result.correctionStatus === 'auto_corrected' && result.rawDetection && (
+                            <div className="text-xs text-gray-500">
+                              Gốc: {result.rawDetection.stt}
+                            </div>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <span className="font-semibold">{result.score.toFixed(1)}</span>
                         {result.numQuestions && (
                           <span className="text-gray-500 text-sm ml-1">/{result.numQuestions}</span>
                         )}
                       </TableCell>
-                      <TableCell>{getStatusBadge(result.status)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Badge 
+                            variant={
+                              result.correctionStatus === 'exact_match' ? 'default' :
+                              result.correctionStatus === 'auto_corrected' ? 'secondary' : 
+                              'destructive'
+                            }
+                          >
+                            {result.correctionStatus === 'exact_match' && 'Chính xác'}
+                            {result.correctionStatus === 'auto_corrected' && 'Đã sửa'}
+                            {result.correctionStatus === 'no_match' && 'Cần kiểm tra'}
+                          </Badge>
+                          {result.correctionReason && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Info className="h-4 w-4 text-gray-400 cursor-help" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="max-w-xs">{result.correctionReason}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>
                         <Dialog>
                           <DialogTrigger asChild>
@@ -232,7 +330,7 @@ export default function Step4Page() {
                               Xem & Sửa
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-4xl">
+                          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
                               <DialogTitle>Chỉnh sửa kết quả - {result.imageName}</DialogTitle>
                             </DialogHeader>
@@ -302,6 +400,54 @@ export default function Step4Page() {
                                       ))}
                                     </SelectContent>
                                   </Select>
+                                </div>
+
+                                {/* Phần đáp án */}
+                                <div>
+                                  <Label>Đáp án của bài thi</Label>
+                                  <div className="mt-2 p-3 border rounded-md bg-gray-50 max-h-64 overflow-y-auto">
+                                    <div className="grid grid-cols-5 gap-2">
+                                      {editForm.answers.map((answer, index) => (
+                                        <div key={index} className="flex flex-col items-center">
+                                          <span className="text-xs text-gray-600 mb-1">Câu {index + 1}</span>
+                                          <button
+                                            type="button"
+                                            onClick={() => handleAnswerChange(index)}
+                                            className={`w-8 h-8 rounded border-2 text-sm font-medium transition-colors ${
+                                              answer === "A" ? "bg-blue-500 text-white border-blue-500" :
+                                              answer === "B" ? "bg-green-500 text-white border-green-500" :
+                                              answer === "C" ? "bg-yellow-500 text-white border-yellow-500" :
+                                              answer === "D" ? "bg-red-500 text-white border-red-500" :
+                                              answer === "X" ? "bg-gray-500 text-white border-gray-500" :
+                                              "bg-white border-gray-300 hover:border-gray-400"
+                                            }`}
+                                          >
+                                            {answer || "?"}
+                                          </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="mt-3 text-xs text-gray-600">
+                                      <p>Click vào ô đáp án để thay đổi:</p>
+                                      <div className="flex gap-2 mt-1">
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-4 h-4 bg-blue-500 rounded"></div>A
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-4 h-4 bg-green-500 rounded"></div>B
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-4 h-4 bg-yellow-500 rounded"></div>C
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-4 h-4 bg-red-500 rounded"></div>D
+                                        </span>
+                                        <span className="inline-flex items-center gap-1">
+                                          <div className="w-4 h-4 bg-gray-500 rounded"></div>X (Không đáp án)
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
                                 </div>
 
                                 <div className="pt-4">

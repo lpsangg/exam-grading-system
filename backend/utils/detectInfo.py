@@ -121,14 +121,14 @@ Chỉ trả về mã số sinh viên, không thêm bất kỳ thông tin nào kh
                 return matched_text[0]
             else:
                 print("No good match found.")
-                return None, 0
+                return None
         else:
             print("No valid text found.")
-            return None, 0
+            return None
 
     except Exception as e:
         print("Error in detect_id_student:", str(e))
-        return None, 0
+        return None
 
 def detect_index_student(image):
     try:

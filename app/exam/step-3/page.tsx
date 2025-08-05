@@ -355,12 +355,6 @@ export default function Step3Page() {
                 </Alert>
 
                 <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Tiến độ xử lý</span>
-                    <span>
-                      {processingStatus.progress.completed}/{processingStatus.progress.total} ảnh
-                    </span>
-                  </div>
                   <Progress value={progressPercentage} className="w-full" />
                 </div>
               </div>
