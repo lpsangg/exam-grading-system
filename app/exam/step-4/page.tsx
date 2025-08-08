@@ -313,6 +313,31 @@ export default function Step4Page() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-blue-600" />
+                      <span className="font-semibold text-blue-800">Tổng số</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600 mt-1">{results.length}</p>
+                  </div>
+
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <span className="font-semibold text-green-800">Bình thường</span>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600 mt-1">
+                      {results.filter((r) => 
+                        !duplicatedStudentIds.has(r.recognizedStudentId) && 
+                        r.recognizedStudentId && 
+                        r.recognizedStudentId.trim() !== '' &&
+                        r.recognizedExamCode && 
+                        r.recognizedExamCode.trim() !== '' &&
+                        (r.name && r.name.trim() !== '')
+                      ).length}
+                    </p>
+                  </div>
+
                   <div className="bg-red-50 p-4 rounded-lg">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="w-5 h-5 text-red-600" />
@@ -321,24 +346,6 @@ export default function Step4Page() {
                     <p className="text-2xl font-bold text-red-600 mt-1">
                       {results.filter((r) => duplicatedStudentIds.has(r.recognizedStudentId)).length}
                     </p>
-                  </div>
-
-                  <div className="bg-yellow-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                      <span className="font-semibold text-yellow-800">Cần kiểm tra</span>
-                    </div>
-                    <p className="text-2xl font-bold text-yellow-600 mt-1">
-                      {results.filter((r) => r.status === "warning").length}
-                    </p>
-                  </div>
-
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5 text-blue-600" />
-                      <span className="font-semibold text-blue-800">Tổng số</span>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-600 mt-1">{results.length}</p>
                   </div>
                 </div>
 
@@ -444,14 +451,20 @@ export default function Step4Page() {
                                   isDuplicatedStudentId ? 'destructive' :
                                   result.correctionStatus === 'exact_match' ? 'default' :
                                   result.correctionStatus === 'auto_corrected' ? 'secondary' : 
-                                  'destructive'
+                                  result.correctionStatus === 'no_match' ? 'destructive' :
+                                  'secondary' // Secondary variant cho trạng thái bình thường (màu xanh lá)
+                                }
+                                className={
+                                  !isDuplicatedStudentId && !result.correctionStatus 
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-100' 
+                                    : ''
                                 }
                               >
-                                {isDuplicatedStudentId && 'MSSV trùng lặp'}
+                                {isDuplicatedStudentId && 'Trùng lặp'}
                                 {!isDuplicatedStudentId && result.correctionStatus === 'exact_match' && 'Chính xác'}
                                 {!isDuplicatedStudentId && result.correctionStatus === 'auto_corrected' && 'Đã sửa'}
                                 {!isDuplicatedStudentId && result.correctionStatus === 'no_match' && 'Cần kiểm tra'}
-                                {!isDuplicatedStudentId && !result.correctionStatus && 'Không xác định'}
+                                {!isDuplicatedStudentId && !result.correctionStatus && 'Bình thường'}
                               </Badge>
                               {(result.correctionReason || isDuplicatedStudentId) && (
                                 <TooltipProvider>
