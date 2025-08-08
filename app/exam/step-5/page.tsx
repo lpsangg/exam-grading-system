@@ -254,7 +254,6 @@ export default function Step5Page() {
                       <TableHead>Câu đúng</TableHead>
                       <TableHead>Điểm</TableHead>
                       <TableHead>Kết Quả</TableHead>
-                      <TableHead>Trạng thái nhận diện</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -289,23 +288,6 @@ export default function Step5Page() {
                               {result.diem >= 5 ? "Đạt" : "Không đạt"}
                             </span>
                           </TableCell>
-                          <TableCell>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                examResult?.correctionStatus === 'exact_match' 
-                                  ? "bg-green-100 text-green-800" 
-                                  : examResult?.correctionStatus === 'auto_corrected'
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {examResult?.correctionStatus === 'exact_match' 
-                                ? "Chính xác" 
-                                : examResult?.correctionStatus === 'auto_corrected'
-                                ? "Đã sửa"
-                                : "Cần kiểm tra"}
-                            </span>
-                          </TableCell>
                         </TableRow>
                       )
                     })}
@@ -319,20 +301,11 @@ export default function Step5Page() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-semibold mb-2">Xuất kết quả vào file Excel gốc</h3>
-                  <p className="text-gray-600">
-                    Điểm sẽ được ghi đè vào cột <strong>"ThangDiem4"</strong> trong file Excel gốc từ Bước 2
-                  </p>
-                  <p className="text-gray-500 text-sm mt-1">
-                    <span className="inline-flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3 text-green-500" />
-                      Giữ nguyên toàn bộ format, styling và cấu trúc gốc
-                    </span>
-                  </p>
                   <p className="text-gray-500 text-sm">
                     File: {studentFile?.name || 'Không có file'}
                   </p>
                 </div>
-                <Button onClick={handleExport} disabled={isExporting || !studentFile} size="lg" className="flex items-center gap-2">
+                <Button onClick={handleExport} disabled={isExporting || !studentFile} size="lg" className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white">
                   {isExporting ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   ) : (
@@ -347,7 +320,7 @@ export default function Step5Page() {
               <Button variant="outline" onClick={handleHome}>
                 Về Trang Chủ
               </Button>
-              <Button onClick={handleNewExam} className="flex items-center gap-2">
+              <Button onClick={handleNewExam} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white">
                 <RotateCcw className="w-4 h-4" />
                 Tạo Kỳ Thi Mới
               </Button>
