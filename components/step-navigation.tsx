@@ -14,8 +14,9 @@ export function StepNavigation({ currentStep }: StepNavigationProps) {
   ]
 
   return (
-    <div className="bg-white rounded-lg shadow-sm p-6">
-      <div className="flex items-center justify-between">
+    <div className="bg-white rounded-lg shadow-sm p-3 sm:p-6">
+      {/* Desktop Navigation */}
+      <div className="hidden sm:flex items-center justify-between">
         {steps.map((step, index) => (
           <div key={step.number} className="flex items-center">
             <div className="flex flex-col items-center">
@@ -46,6 +47,36 @@ export function StepNavigation({ currentStep }: StepNavigationProps) {
             )}
           </div>
         ))}
+      </div>
+
+      {/* Mobile Navigation */}
+      <div className="flex sm:hidden items-center justify-center">
+        <div className="text-center">
+          <div
+            className={`w-12 h-12 rounded-full flex items-center justify-center border-2 mx-auto ${
+              currentStep > 1 
+                ? "bg-green-500 border-green-500 text-white"
+                : "bg-blue-500 border-blue-500 text-white"
+            }`}
+          >
+            {currentStep > 1 && currentStep <= steps.length ? (
+              <CheckCircle className="w-6 h-6" />
+            ) : (
+              <span className="font-semibold text-lg">{currentStep}</span>
+            )}
+          </div>
+          <div className="mt-2">
+            <span className="text-blue-600 font-semibold text-base">
+              Bước {currentStep}
+            </span>
+            <div className="text-gray-600 text-sm">
+              {steps[currentStep - 1]?.title}
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {currentStep} / {steps.length}
+          </div>
+        </div>
       </div>
     </div>
   )

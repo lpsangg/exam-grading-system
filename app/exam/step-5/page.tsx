@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Download, CheckCircle, RotateCcw } from "lucide-react"
+import { Download, CheckCircle, RotateCcw, AlertTriangle } from "lucide-react"
 import { StepNavigation } from "@/components/step-navigation"
 import { toast } from "sonner"
+import { useExamStore } from "@/lib/store"
 
 interface FinalResult {
   stt: number
@@ -20,40 +21,119 @@ interface FinalResult {
 
 export default function Step5Page() {
   const router = useRouter()
+  const { examResults, studentFile } = useExamStore()
   const [isExporting, setIsExporting] = useState(false)
+  const [finalResults, setFinalResults] = useState<FinalResult[]>([])
 
-  const finalResults: FinalResult[] = [
-    { stt: 1, mssv: "20181234", hoTen: "Nguyễn Văn An", maDe: "132", diem: 8.5 },
-    { stt: 2, mssv: "20181235", hoTen: "Trần Thị Bình", maDe: "209", diem: 6.0 },
-    { stt: 3, mssv: "20181236", hoTen: "Lê Văn Cường", maDe: "357", diem: 7.0 },
-  ]
+  // Function to convert score to 10-point scale
+  const convertToTenPointScale = (correctAnswers: number, totalQuestions: number): number => {
+    if (totalQuestions === 0) return 0
+    return (correctAnswers / totalQuestions) * 10
+  }
+
+  // Convert examResults to finalResults format
+  useEffect(() => {
+    if (examResults && examResults.length > 0) {
+      const convertedResults: FinalResult[] = examResults.map((result, index) => {
+        const correctAnswers = result.score || 0  // Backend trả về số câu đúng trong field score
+        const totalQuestions = result.numQuestions || 0
+        const tenPointScore = convertToTenPointScale(correctAnswers, totalQuestions)
+        
+        return {
+          stt: index + 1,
+          mssv: result.id || result.recognizedStudentId || 'N/A',
+          hoTen: result.name || 'N/A',
+          maDe: result.recognizedExamCode || result.testVariant || 'N/A',
+          diem: tenPointScore  // Điểm thang 10
+        }
+      })
+      setFinalResults(convertedResults)
+      console.log('📊 Step-5: Converted exam results:', convertedResults)
+      console.log('📊 Step-5: Raw exam results sample:', examResults[0])
+      console.log('📊 Step-5: Available fields:', examResults[0] ? Object.keys(examResults[0]) : 'No data')
+    } else {
+      console.log('⚠️  Step-5: No exam results found')
+      setFinalResults([])
+    }
+  }, [examResults])
 
   const handleExport = async () => {
+    if (!finalResults || finalResults.length === 0) {
+      toast.error("Không có dữ liệu để xuất file")
+      return
+    }
+
+    if (!studentFile) {
+      toast.error("Không tìm thấy file danh sách sinh viên gốc")
+      return
+    }
+
     setIsExporting(true)
 
     try {
-      // Simulate file generation
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Prepare data for API
+      const exportData = {
+        results: finalResults.map((result, index) => {
+          const examResult = examResults?.[index]
+          return {
+            stt: result.stt,
+            mssv: result.mssv,
+            hoTen: result.hoTen,
+            maDe: result.maDe,
+            diem: result.diem, // Điểm thang 10
+            cauDung: examResult?.score || 0,
+            tongCau: examResult?.numQuestions || 0
+          }
+        }),
+        student_filename: studentFile.name
+      }
 
-      // Create a mock Excel file download
-      const csvContent = [
-        "STT,MSSV,Họ và Tên,Mã Đề,Điểm",
-        ...finalResults.map((result) => `${result.stt},${result.mssv},${result.hoTen},${result.maDe},${result.diem}`),
-      ].join("\n")
+      console.log('📤 Exporting data:', exportData)
 
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-      const link = document.createElement("a")
-      const url = URL.createObjectURL(blob)
-      link.setAttribute("href", url)
-      link.setAttribute("download", `ket-qua-thi-${new Date().toISOString().split("T")[0]}.csv`)
-      link.style.visibility = "hidden"
+      // Call API to export to original Excel
+      const response = await fetch('http://localhost:5000/api/export_to_original_excel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(exportData),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to export to Excel')
+      }
+
+      console.log('📤 Export result:', result)
+
+      // Download the generated file
+      const downloadResponse = await fetch(`http://localhost:5000/api/download_result_excel/${result.filename}`)
+      
+      if (!downloadResponse.ok) {
+        throw new Error('Failed to download exported file')
+      }
+
+      const blob = await downloadResponse.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = result.filename
+      link.style.display = 'none'
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
 
-      toast.success("Đã tải xuống file kết quả thành công!")
+      toast.success(`Đã xuất kết quả vào file Excel gốc với đầy đủ format! (${result.updated_count}/${result.total_students} sinh viên)`)
+      
+      // Log thông tin chi tiết
+      if (result.mssv_column && result.thangdiem4_column) {
+        console.log(`📊 Updated columns - MSSV: column ${result.mssv_column}, ThangDiem4: column ${result.thangdiem4_column}`)
+      }
     } catch (error) {
-      toast.error("Có lỗi xảy ra khi xuất file")
+      console.error('Export error:', error)
+      toast.error("Có lỗi xảy ra khi xuất file: " + (error instanceof Error ? error.message : 'Unknown error'))
     } finally {
       setIsExporting(false)
     }
@@ -67,7 +147,51 @@ export default function Step5Page() {
     router.push("/")
   }
 
-  const averageScore = finalResults.reduce((sum, result) => sum + result.diem, 0) / finalResults.length
+  const averageScore = finalResults.length > 0 
+    ? finalResults.reduce((sum, result) => sum + result.diem, 0) / finalResults.length 
+    : 0
+
+  // Show message if no data
+  if (!finalResults || finalResults.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          <StepNavigation currentStep={5} />
+          
+          <Card className="mt-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="w-6 h-6 text-green-600" />
+                Bước 5: Xuất Kết Quả
+              </CardTitle>
+              <CardDescription>
+                Chưa có dữ liệu kết quả để hiển thị.
+              </CardDescription>
+            </CardHeader>
+            
+            <CardContent className="space-y-6">
+              <Alert className="border-yellow-200 bg-yellow-50">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription className="text-yellow-800">
+                  Chưa có kết quả chấm thi nào. Vui lòng quay lại các bước trước để xử lý bài thi.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={handleHome}>
+                  Về Trang Chủ
+                </Button>
+                <Button onClick={() => router.push("/exam/step-1")} className="flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" />
+                  Bắt Đầu Lại
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -127,37 +251,64 @@ export default function Step5Page() {
                       <TableHead>MSSV</TableHead>
                       <TableHead>Họ và Tên</TableHead>
                       <TableHead>Mã Đề</TableHead>
+                      <TableHead>Câu đúng</TableHead>
                       <TableHead>Điểm</TableHead>
                       <TableHead>Kết Quả</TableHead>
+                      <TableHead>Trạng thái nhận diện</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {finalResults.map((result) => (
-                      <TableRow key={result.stt}>
-                        <TableCell>{result.stt}</TableCell>
-                        <TableCell className="font-mono">{result.mssv}</TableCell>
-                        <TableCell>{result.hoTen}</TableCell>
-                        <TableCell className="font-mono">{result.maDe}</TableCell>
-                        <TableCell>
-                          <span
-                            className={`font-semibold ${
-                              result.diem >= 8 ? "text-green-600" : result.diem >= 5 ? "text-blue-600" : "text-red-600"
-                            }`}
-                          >
-                            {result.diem.toFixed(1)}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              result.diem >= 5 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                            }`}
-                          >
-                            {result.diem >= 5 ? "Đạt" : "Không đạt"}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {finalResults.map((result, index) => {
+                      const examResult = examResults?.[index]
+                      return (
+                        <TableRow key={result.stt}>
+                          <TableCell>{result.stt}</TableCell>
+                          <TableCell className="font-mono">{result.mssv}</TableCell>
+                          <TableCell>{result.hoTen}</TableCell>
+                          <TableCell className="font-mono">{result.maDe}</TableCell>
+                          <TableCell>
+                            <span className="font-semibold">
+                              {examResult?.score || 0}/{examResult?.numQuestions || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`font-semibold ${
+                                result.diem >= 8 ? "text-green-600" : result.diem >= 5 ? "text-blue-600" : "text-red-600"
+                              }`}
+                            >
+                              {result.diem.toFixed(1)}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                result.diem >= 5 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {result.diem >= 5 ? "Đạt" : "Không đạt"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                examResult?.correctionStatus === 'exact_match' 
+                                  ? "bg-green-100 text-green-800" 
+                                  : examResult?.correctionStatus === 'auto_corrected'
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
+                              }`}
+                            >
+                              {examResult?.correctionStatus === 'exact_match' 
+                                ? "Chính xác" 
+                                : examResult?.correctionStatus === 'auto_corrected'
+                                ? "Đã sửa"
+                                : "Cần kiểm tra"}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
@@ -167,10 +318,21 @@ export default function Step5Page() {
             <div className="bg-gray-50 p-6 rounded-lg">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-semibold mb-2">Xuất file kết quả</h3>
-                  <p className="text-gray-600">Tải xuống file Excel chứa đầy đủ kết quả chấm thi</p>
+                  <h3 className="text-lg font-semibold mb-2">Xuất kết quả vào file Excel gốc</h3>
+                  <p className="text-gray-600">
+                    Điểm sẽ được ghi đè vào cột <strong>"ThangDiem4"</strong> trong file Excel gốc từ Bước 2
+                  </p>
+                  <p className="text-gray-500 text-sm mt-1">
+                    <span className="inline-flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-green-500" />
+                      Giữ nguyên toàn bộ format, styling và cấu trúc gốc
+                    </span>
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    File: {studentFile?.name || 'Không có file'}
+                  </p>
                 </div>
-                <Button onClick={handleExport} disabled={isExporting} size="lg" className="flex items-center gap-2">
+                <Button onClick={handleExport} disabled={isExporting || !studentFile} size="lg" className="flex items-center gap-2">
                   {isExporting ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                   ) : (

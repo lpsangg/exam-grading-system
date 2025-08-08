@@ -84,21 +84,21 @@ export default function Step1Page() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         <StepNavigation currentStep={1} />
 
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="w-6 h-6" />
+        <Card className="mt-4 sm:mt-8">
+          <CardHeader className="pb-4 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
               Bước 1: Tải Lên Đáp Án
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm sm:text-base">
               Tải lên file Excel chứa đáp án cho các mã đề thi. File phải có định dạng .xlsx
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 sm:space-y-6">
             <FileUpload
               onFileSelect={handleFileUpload}
               accept=".xlsx"
@@ -124,7 +124,7 @@ export default function Step1Page() {
                 ) : (
                   <AlertCircle className="h-4 w-4 text-red-600" />
                 )}
-                <AlertDescription className={uploadResult.success ? "text-green-800" : "text-red-800"}>
+                <AlertDescription className={`${uploadResult.success ? "text-green-800" : "text-red-800"} text-sm sm:text-base`}>
                   {uploadResult.message}
                   {uploadResult.examCodes && (
                     <div className="mt-2">
@@ -135,11 +135,11 @@ export default function Step1Page() {
               </Alert>
             )}
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={() => router.push("/")}>
+            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+              <Button variant="outline" onClick={() => router.push("/")} className="w-full sm:w-auto">
                 Về Trang Chủ
               </Button>
-              <Button onClick={handleNext} disabled={!uploadResult?.success}>
+              <Button onClick={handleNext} disabled={!uploadResult?.success} className="w-full sm:w-auto">
                 Tiếp Tục
               </Button>
             </div>

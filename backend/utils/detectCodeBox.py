@@ -4,6 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re  # Thêm thư viện re để sử dụng biểu thức chính quy
 
+# Cấu hình đường dẫn tesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
 def detect_code_box(image_path):
     # Đọc ảnh từ đường dẫn
     image = cv2.imread(image_path)

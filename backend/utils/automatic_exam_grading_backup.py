@@ -14,6 +14,21 @@ import uuid
 from collections import Counter
 from ultralytics import YOLO
 
+# Import torch với fallback handling
+try:
+    import torch
+    import torch.nn.functional as F
+    TORCH_AVAILABLE = True
+except ImportError:
+    print("PyTorch not available. Some advanced features may not work.")
+    TORCH_AVAILABLE = False
+
+# Suppress warnings
+import warnings
+warnings.filterwarnings("ignore", message="Some weights of VisionEncoderDecoderModel were not initialized")
+warnings.filterwarnings("ignore", message="You should probably TRAIN this model")
+warnings.filterwarnings("ignore", message="Neither CUDA nor MPS are available")
+
 # Cấu hình đường dẫn tesseract
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -329,16 +344,275 @@ def detect_name_student(image_path, student_names):
 import warnings
 warnings.filterwarnings("ignore", message="Some weights of VisionEncoderDecoderModel were not initialized")
 warnings.filterwarnings("ignore", message="You should probably TRAIN this model")
+warnings.filterwarnings("ignore", message="Neither CUDA nor MPS are available")
 
-# Load model và processor 1 lần khi import với cấu hình tốt hơn
-processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-handwritten', use_fast=True)
+# Global variables cho model và processor để tránh load nhiều lần
+_processor = None
+_model = None
 
-# Load model with better configuration to reduce warnings
-model = VisionEncoderDecoderModel.from_pretrained(
-    'microsoft/trocr-base-handwritten',
-    local_files_only=False,
-    trust_remote_code=False
-)
+def get_trocr_model():
+    """Lazy loading của TrOCR model với weight initialization tốt hơn"""
+    global _processor, _model
+    
+    if _processor is None or _model is None:
+        # Load processor
+        _processor = TrOCRProcessor.from_pretrained(
+            'microsoft/trocr-base-handwritten', 
+            use_fast=True
+        )
+        
+        # Load model với cấu hình tốt hơn
+        _model = VisionEncoderDecoderModel.from_pretrained(
+            'microsoft/trocr-base-handwritten',
+            local_files_only=False,
+            trust_remote_code=False,
+            ignore_mismatched_sizes=True,  # Bỏ qua kích thước không khớp
+            force_download=False,          # Không force download nếu đã có cache
+            resume_download=True           # Tiếp tục download nếu bị gián đoạn
+        )
+        
+        # Khởi tạo weights cho các layer chưa được initialized
+        # Đây là cách manual để khởi tạo missing weights
+        try:
+            # Khởi tạo encoder pooler nếu chưa có
+            if hasattr(_model, 'encoder') and hasattr(_model.encoder, 'pooler'):
+                if hasattr(_model.encoder.pooler, 'dense'):
+                    # Khởi tạo weight và bias cho dense layer
+                    if TORCH_AVAILABLE:
+                        import torch.nn as nn
+                        if _model.encoder.pooler.dense.weight.requires_grad:
+                            nn.init.xavier_uniform_(_model.encoder.pooler.dense.weight)
+                        if _model.encoder.pooler.dense.bias is not None:
+                            nn.init.zeros_(_model.encoder.pooler.dense.bias)
+                        
+            print("TrOCR model loaded and weights initialized successfully")
+            
+        except Exception as init_error:
+            print(f"Warning: Could not initialize some weights: {init_error}")
+            # Model vẫn hoạt động được ngay cả khi không init được một số weights
+        
+        # Set model to evaluation mode
+        _model.eval()
+        
+        # Tối ưu inference speed nếu có thể
+        try:
+            if TORCH_AVAILABLE and torch.cuda.is_available():
+                _model = _model.cuda()
+                print("Model moved to CUDA")
+            else:
+                print("Running on CPU (consider using GPU for better performance)")
+        except Exception as cuda_error:
+            print(f"Could not move model to CUDA: {cuda_error}")
+            print("Running on CPU")
+    
+    return _processor, _model
+
+# Load model và processor 1 lần khi import
+processor, model = get_trocr_model()
+
+def save_custom_weights(model_path="./custom_trocr_weights.pth"):
+    """Lưu trọng số custom của model để sử dụng lại"""
+    try:
+        if not TORCH_AVAILABLE:
+            print("PyTorch not available. Cannot save weights.")
+            return False
+            
+        torch.save(model.state_dict(), model_path)
+        print(f"Custom weights saved to {model_path}")
+        return True
+    except Exception as e:
+        print(f"Error saving weights: {e}")
+        return False
+
+def load_custom_weights(model_path="./custom_trocr_weights.pth"):
+    """Load trọng số custom đã được fine-tune"""
+    try:
+        if not TORCH_AVAILABLE:
+            print("PyTorch not available. Cannot load custom weights.")
+            return False
+            
+        import os
+        
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+            print(f"Custom weights loaded from {model_path}")
+            return True
+        else:
+            print(f"Custom weights file not found at {model_path}")
+            return False
+    except Exception as e:
+        print(f"Error loading custom weights: {e}")
+        return False
+
+def initialize_missing_weights():
+    """Khởi tạo lại các trọng số bị missing một cách thủ công"""
+    try:
+        if not TORCH_AVAILABLE:
+            print("PyTorch not available. Cannot initialize weights manually.")
+            return False
+            
+        import torch.nn as nn
+        
+        # Khởi tạo encoder pooler weights nếu cần
+        if hasattr(model, 'encoder') and hasattr(model.encoder, 'pooler'):
+            if hasattr(model.encoder.pooler, 'dense'):
+                # Xavier uniform initialization cho weight matrix
+                nn.init.xavier_uniform_(model.encoder.pooler.dense.weight)
+                # Zero initialization cho bias
+                if model.encoder.pooler.dense.bias is not None:
+                    nn.init.zeros_(model.encoder.pooler.dense.bias)
+                print("Encoder pooler weights initialized successfully")
+        
+        # Có thể thêm initialization cho các layer khác nếu cần
+        return True
+        
+    except Exception as e:
+        print(f"Error initializing weights: {e}")
+        return False
+
+# Khởi tạo missing weights khi load model
+initialize_missing_weights()
+
+def fine_tune_model(training_data=None, epochs=1, learning_rate=1e-5):
+    """
+    Fine-tune model trên data cụ thể để cải thiện hiệu suất
+    training_data: list of (image_path, expected_text) tuples
+    """
+    if training_data is None or len(training_data) == 0:
+        print("No training data provided for fine-tuning")
+        return False
+        
+    try:
+        import torch
+        import torch.nn as nn
+        from torch.optim import AdamW
+        from torch.utils.data import DataLoader, Dataset
+        
+        class OCRDataset(Dataset):
+            def __init__(self, data, processor):
+                self.data = data
+                self.processor = processor
+            
+            def __len__(self):
+                return len(self.data)
+            
+            def __getitem__(self, idx):
+                image_path, text = self.data[idx]
+                image = Image.open(image_path).convert("RGB")
+                
+                # Encode image
+                pixel_values = self.processor(images=image, return_tensors="pt").pixel_values.squeeze()
+                
+                # Encode text
+                labels = self.processor.tokenizer(text, 
+                                                return_tensors="pt", 
+                                                padding="max_length", 
+                                                max_length=256,
+                                                truncation=True).input_ids.squeeze()
+                
+                return {
+                    'pixel_values': pixel_values,
+                    'labels': labels
+                }
+        
+        # Tạo dataset và dataloader
+        dataset = OCRDataset(training_data, processor)
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        
+        # Setup optimizer
+        optimizer = AdamW(model.parameters(), lr=learning_rate)
+        
+        # Training loop
+        model.train()
+        print(f"Starting fine-tuning with {len(training_data)} samples for {epochs} epochs...")
+        
+        for epoch in range(epochs):
+            total_loss = 0
+            for batch_idx, batch in enumerate(dataloader):
+                pixel_values = batch['pixel_values']
+                labels = batch['labels']
+                
+                # Forward pass
+                outputs = model(pixel_values=pixel_values, labels=labels)
+                loss = outputs.loss
+                
+                # Backward pass
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                
+                total_loss += loss.item()
+                
+                if batch_idx % 10 == 0:
+                    print(f"Epoch {epoch+1}/{epochs}, Batch {batch_idx}, Loss: {loss.item():.4f}")
+            
+            avg_loss = total_loss / len(dataloader)
+            print(f"Epoch {epoch+1} completed. Average Loss: {avg_loss:.4f}")
+        
+        # Set back to eval mode
+        model.eval()
+        print("Fine-tuning completed successfully!")
+        return True
+        
+    except Exception as e:
+        print(f"Error during fine-tuning: {e}")
+        return False
+
+def ocr_with_confidence(image_path, return_confidence=False):
+    """
+    Thực hiện OCR với confidence score để đánh giá độ tin cậy của kết quả
+    """
+    try:
+        # Mở ảnh và chuyển sang RGB
+        image = Image.open(image_path).convert("RGB")
+        
+        # Tiền xử lý ảnh
+        pixel_values = processor(images=image, return_tensors="pt").pixel_values
+        
+        if TORCH_AVAILABLE and return_confidence:
+            # Generate với output_scores để lấy confidence
+            with torch.no_grad():
+                generated_ids = model.generate(
+                    pixel_values,
+                    max_length=256,
+                    num_beams=4,  # Beam search để có kết quả tốt hơn
+                    early_stopping=True,
+                    return_dict_in_generate=True,
+                    output_scores=True
+                )
+            
+            # Decode text
+            generated_text = processor.batch_decode(
+                generated_ids.sequences, 
+                skip_special_tokens=True
+            )[0]
+            
+            # Tính confidence score từ logits
+            scores = generated_ids.scores
+            if scores:
+                # Lấy average confidence từ các time steps
+                confidences = []
+                for score in scores:
+                    probs = F.softmax(score, dim=-1)
+                    max_prob = torch.max(probs, dim=-1)[0]
+                    confidences.append(max_prob.item())
+                
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+                return generated_text, avg_confidence
+            else:
+                return generated_text, 0.5  # Default confidence
+        else:
+            # Fallback to simple generation
+            generated_ids = model.generate(pixel_values)
+            generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+            if return_confidence:
+                return generated_text, 0.5  # Default confidence when torch not available
+            return generated_text
+        
+    except Exception as e:
+        print(f"Error in OCR with confidence: {e}")
+        return ("", 0.0) if return_confidence else ""
 def detect_id_student(image_path, student_ids, show_image=False):
     try:
         # Mở ảnh và chuyển sang RGB

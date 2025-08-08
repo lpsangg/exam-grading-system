@@ -20,7 +20,7 @@ interface Student {
 
 export default function Step2Page() {
   const router = useRouter()
-  const { setStudentFile, studentFile, setStudentCount, setCalculatedRooms, setStudentList } = useExamStore()
+  const { setStudentFile, studentFile, setStudentCount, setCalculatedRooms } = useExamStore()
   const [isUploading, setIsUploading] = useState(false)
   const [students, setStudents] = useState<Student[]>([])
   const [uploadResult, setUploadResult] = useState<{
@@ -51,18 +51,6 @@ export default function Step2Page() {
         setStudentFile(file)
         setStudents(data.students || [])
         setStudentCount(data.studentCount || 0)
-        
-        // Lưu danh sách sinh viên vào store
-        if (data.students && Array.isArray(data.students)) {
-          const studentList = data.students.map((student: any) => ({
-            id: student.mssv || student.MSSV || '',
-            name: student.hoTen || student.HoTen || 
-                  (student.HoDem && student.Ten ? `${student.HoDem} ${student.Ten}` : '') || 
-                  student.Ten || ''
-          }))
-          setStudentList(studentList)
-          console.log('💾 Saved student list to store:', studentList)
-        }
         
         // Tính toán phòng thi dựa trên số lượng sinh viên
         const roomResponse = await fetch('http://localhost:5000/api/calculate_rooms', {
@@ -110,19 +98,21 @@ export default function Step2Page() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         <StepNavigation currentStep={2} />
 
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-6 h-6" />
+        <Card className="mt-4 sm:mt-8">
+          <CardHeader className="pb-4 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <Users className="w-5 h-5 sm:w-6 sm:h-6" />
               Bước 2: Tải Lên Danh Sách Lớp
             </CardTitle>
-            <CardDescription>Tải lên file Excel chứa danh sách sinh viên. File phải có định dạng .xlsx</CardDescription>
+            <CardDescription className="text-sm sm:text-base">
+              Tải lên file Excel chứa danh sách sinh viên. File phải có định dạng .xlsx
+            </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4 sm:space-y-6">
             <FileUpload
               onFileSelect={handleFileUpload}
               accept=".xlsx"
@@ -145,7 +135,7 @@ export default function Step2Page() {
                 ) : (
                   <AlertCircle className="h-4 w-4 text-red-600" />
                 )}
-                <AlertDescription className={uploadResult.success ? "text-green-800" : "text-red-800"}>
+                <AlertDescription className={`${uploadResult.success ? "text-green-800" : "text-red-800"} text-sm sm:text-base`}>
                   {uploadResult.message}
                   {uploadResult.studentCount && (
                     <div className="mt-1">
@@ -157,41 +147,43 @@ export default function Step2Page() {
             )}
 
             {students.length > 0 && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Xem trước danh sách sinh viên:</h3>
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold">Xem trước danh sách sinh viên:</h3>
                 <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-16">STT</TableHead>
-                        <TableHead>MSSV</TableHead>
-                        <TableHead>Họ và Tên</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {students.slice(0, 5).map((student) => (
-                        <TableRow key={student.stt}>
-                          <TableCell>{student.stt}</TableCell>
-                          <TableCell className="font-mono">{student.mssv}</TableCell>
-                          <TableCell>{student.hoTen}</TableCell>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-16 text-xs sm:text-sm">STT</TableHead>
+                          <TableHead className="text-xs sm:text-sm">MSSV</TableHead>
+                          <TableHead className="text-xs sm:text-sm">Họ và Tên</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {students.slice(0, 5).map((student) => (
+                          <TableRow key={student.stt}>
+                            <TableCell className="text-xs sm:text-sm">{student.stt}</TableCell>
+                            <TableCell className="font-mono text-xs sm:text-sm">{student.mssv}</TableCell>
+                            <TableCell className="text-xs sm:text-sm">{student.hoTen}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
                 {students.length > 5 && (
-                  <p className="text-sm text-gray-600 text-center">
+                  <p className="text-xs sm:text-sm text-gray-600 text-center">
                     Hiển thị 5 sinh viên đầu tiên. Tổng cộng: {students.length} sinh viên
                   </p>
                 )}
               </div>
             )}
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={handleBack}>
+            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+              <Button variant="outline" onClick={handleBack} className="w-full sm:w-auto">
                 Quay Lại
               </Button>
-              <Button onClick={handleNext} disabled={!uploadResult?.success}>
+              <Button onClick={handleNext} disabled={!uploadResult?.success} className="w-full sm:w-auto">
                 Tiếp Tục
               </Button>
             </div>

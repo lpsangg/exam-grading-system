@@ -1,20 +1,22 @@
 import cv2
 import numpy as np
+import os
 from collections import Counter
 from ultralytics import YOLO
 import uuid
 
-def predict_grade(path_image, model_path = r"F:\KHMT0121\Do_An_4\Resource\AuGrad\models\final_model.pt"):
+def predict_grade(path_image, model_path = "models/final_model.pt", save_processed_image=True):
     """
     Xử lý ảnh bảng chấm điểm, lưu kết quả đè lên ảnh đầu vào và trả về mảng kết quả ký tự.
 
     Args:
         path_image (str): Đường dẫn tới ảnh đầu vào, cũng là nơi lưu ảnh kết quả.
         model_path (str): Đường dẫn tới mô hình YOLO (mặc định: /content/final_model.pt).
+        save_processed_image (bool): Có lưu ảnh đã xử lý không (mặc định: True).
 
     Returns:
-        tuple: (path_image, student_result)
-            - path_image (str): Đường dẫn tới ảnh kết quả đã lưu (đè lên ảnh đầu vào).
+        tuple: (processed_image_path, student_result)
+            - processed_image_path (str): Đường dẫn tới ảnh kết quả đã lưu với bounding boxes.
             - student_result (dict): Mảng chứa các ký tự từ 1 đến 60.
     """
     # Load mô hình
@@ -164,8 +166,21 @@ def predict_grade(path_image, model_path = r"F:\KHMT0121\Do_An_4\Resource\AuGrad
         cv2.rectangle(img_result, (x1, y1), (x1 + label_size[0] + 10, y1 + label_size[1] + 10), (0, 255, 0), -1)
         cv2.putText(img_result, label, (label_x, label_y), font, font_scale, (0, 0, 0), 2)
 
-    # Lưu ảnh vào đường dẫn (đè lên ảnh đầu vào)
-    cv2.imwrite(path_image, img_result)
-    # print(f"Ảnh đã được lưu tại: {path_image}")
-
-    return path_image, student_result
+    # Lưu ảnh đã xử lý với bounding boxes
+    if save_processed_image:
+        # Tạo đường dẫn cho ảnh processed (với bounding boxes)
+        dir_path = os.path.dirname(path_image)
+        filename = os.path.basename(path_image)
+        name, ext = os.path.splitext(filename)
+        processed_image_path = os.path.join(dir_path, f"{name}_with_bboxes{ext}")
+        
+        cv2.imwrite(processed_image_path, img_result)
+        # print(f"Ảnh đã xử lý được lưu tại: {processed_image_path}")
+        
+        return processed_image_path, student_result
+    else:
+        # Đè lên ảnh gốc (behavior cũ)
+        cv2.imwrite(path_image, img_result)
+        # print(f"Ảnh đã được lưu tại: {path_image}")
+        
+        return path_image, student_result

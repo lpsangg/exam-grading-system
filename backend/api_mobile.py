@@ -1,12 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, Request
 from fastapi.responses import JSONResponse, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
 import os
 import pandas as pd
 from typing import List
 import logging
 import json
-import pytesseract
 
 # Import image processing functions
 from utils.image_processing import image_processing
@@ -15,9 +13,7 @@ from utils.detectInfo import detect_name_student, detect_id_student, detect_inde
 from utils.detectGrade import predict_grade
 from utils.automatic_exam_grading import calculate_score
 from utils.student_validation import validate_and_correct_student_info
-# Nếu cần giữ detect_index_student, overlay_image, copy_to_static thì import riêng
-from utils.processing_result_file import process_df_key, process_df_student
-pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
+from utils.processing_result_file import process_df_student
 
 def normalize_path(path):
     """Normalize path separators to forward slashes for web compatibility"""
@@ -142,7 +138,6 @@ async def upload_student_list(file: UploadFile = File(...)):
                 return JSONResponse({'error': result['error']}, status_code=400)
             
             # Lưu df_parts vào file tạm
-            import tempfile
             temp_dir = os.path.join('uploads', 'temp')
             os.makedirs(temp_dir, exist_ok=True)
             
@@ -345,7 +340,6 @@ async def process_images(request: Request):
                 # Xử lý ảnh và lấy tọa độ vùng phiếu thi
                 processing_result = image_processing(image_path)
                 paths = processing_result.get('paths', {})
-                grading_box = processing_result.get('grading_box', None)
                 
                 temp_file_name = os.path.basename(image_path).split('.')[0]
                 temp_file_name = temp_file_name.replace('\t', '').replace('\\', '/')
@@ -368,7 +362,21 @@ async def process_images(request: Request):
                 raw_name = detect_name_student(name_student_path, student_names)
                 raw_id = detect_id_student(id_student_path, student_ids)
                 raw_index = detect_index_student(index_student_path)
-                path_image, student_result = predict_grade(grading_path)
+                
+                # Xử lý ảnh để lấy đáp án bằng YOLO model với bounding boxes
+                try:
+                    logger.info(f"Starting YOLO processing for {grading_path}")
+                    # Gọi predict_grade với save_processed_image=True để tạo ảnh với bounding boxes
+                    processed_image_path, student_result = predict_grade(grading_path, save_processed_image=True)
+                    logger.info(f"YOLO processing completed. Processed image: {processed_image_path}")
+                    logger.info(f"Student result keys: {list(student_result.keys()) if student_result else 'None'}")
+                except Exception as e:
+                    logger.error(f"Error in predict_grade: {str(e)}")
+                    raise Exception(f"Error in YOLO processing: {str(e)}")
+
+                if not student_result:
+                    logger.error("No answers detected by YOLO model")
+                    raise Exception("No answers detected by YOLO model")
                 
                 # Lấy STT đầu tiên nếu có
                 raw_stt = raw_index[0] if raw_index else None
@@ -387,7 +395,6 @@ async def process_images(request: Request):
                 corrected_stt = validation_result['stt']
                 correction_status = validation_result['status']
                 correction_reason = validation_result['correction_reason']
-                path_image, student_result = predict_grade(grading_path)
                 
                 # Kiểm tra kết quả chấm điểm
                 if student_result is None:
@@ -414,6 +421,9 @@ async def process_images(request: Request):
                     correction_status != 'exact_match'
                 )
                 
+                # Tạo đường dẫn cho ảnh processed
+                processed_filename = os.path.basename(processed_image_path)
+                
                 student = {
                     'id': corrected_mssv,
                     'name': corrected_name,
@@ -421,6 +431,8 @@ async def process_images(request: Request):
                     'score': score,
                     'answers': answers,
                     'image': normalize_path(image_filename),
+                    'imageName': temp_file_name,  # Tên folder cho processed images
+                    'processedGradingImage': normalize_path(f"temp/{temp_file_name}/{processed_filename}"),  # Đường dẫn ảnh đã xử lý với bounding boxes
                     'has_issue': has_issue,
                     'num_questions': num_questions,
                     'index_student': corrected_stt or 'N/A',
@@ -551,3 +563,132 @@ async def get_image(filename: str):
     except Exception as e:
         logger.error(f"Error serving image {filename}: {str(e)}")
         return JSONResponse({'error': 'Error serving image'}, status_code=500)
+
+# Serve processed images (table grading results)
+@router.get('/api/processed_images/{image_folder}/{filename}')
+async def get_processed_image(image_folder: str, filename: str):
+    try:
+        file_path = os.path.join('uploads', 'images', 'temp', image_folder, filename)
+        if not os.path.exists(file_path):
+            return JSONResponse({'error': 'Processed image not found'}, status_code=404)
+        return FileResponse(file_path)
+    except Exception as e:
+        logger.error(f"Error serving processed image {image_folder}/{filename}: {str(e)}")
+        return JSONResponse({'error': 'Error serving processed image'}, status_code=500)
+
+# Export results to original Excel file
+@router.post('/api/export_to_original_excel')
+async def export_to_original_excel(request: Request):
+    try:
+        data = await request.json()
+        results = data.get('results', [])
+        student_filename = data.get('student_filename', '')
+        
+        logger.info(f"Export to original Excel request - student_filename: {student_filename}, results count: {len(results)}")
+        
+        if not results or not student_filename:
+            return JSONResponse({'error': 'Missing results or student filename'}, status_code=400)
+        
+        # Đường dẫn file Excel gốc
+        original_file_path = os.path.join('uploads', 'student', student_filename)
+        
+        if not os.path.exists(original_file_path):
+            logger.error(f"Original student file not found: {original_file_path}")
+            return JSONResponse({'error': 'Original student file not found'}, status_code=400)
+        
+        try:
+            # Sử dụng openpyxl để giữ nguyên format file Excel
+            from openpyxl import load_workbook
+            
+            # Load workbook với tất cả formatting
+            workbook = load_workbook(original_file_path)
+            worksheet = workbook.active
+            
+            logger.info(f"Loaded Excel workbook: {original_file_path}")
+            logger.info(f"Worksheet dimensions: {worksheet.max_row} rows x {worksheet.max_column} cols")
+            
+            # Tìm vị trí cột ThangDiem4 và vùng dữ liệu sinh viên
+            # Dựa vào cấu trúc: skiprows=6, header=[0, 1, 2]
+            header_row = 7  # Row 7 trong Excel (0-indexed + 6 + 1)
+            data_start_row = 8  # Dữ liệu bắt đầu từ row 8
+            
+            # Mặc định cột MSSV là cột B (cột thứ 2) và ThangDiem4 là cột M (cột thứ 13)
+            mssv_col = 2
+            thangdiem4_col = 13
+            logger.info(f"Using default columns - MSSV: B (column {mssv_col}), ThangDiem4: M (column {thangdiem4_col})")
+            
+            # Tạo dictionary để map MSSV -> Điểm (làm tròn đến 1 chữ số thập phân)
+            score_map = {}
+            for result in results:
+                mssv = str(result.get('mssv', '')).strip()
+                diem = result.get('diem', 0)
+                if mssv and mssv != 'N/A':
+                    # Làm tròn điểm đến 1 chữ số thập phân
+                    score_map[mssv] = round(float(diem), 1)
+            
+            logger.info(f"Created score map for {len(score_map)} students")
+            
+            # Update điểm vào cột ThangDiem4 với giữ nguyên format
+            updated_count = 0
+            for row in range(data_start_row, worksheet.max_row + 1):
+                mssv_cell = worksheet.cell(row=row, column=mssv_col)
+                if mssv_cell.value:
+                    try:
+                        mssv_str = str(int(mssv_cell.value)) if isinstance(mssv_cell.value, (int, float)) else str(mssv_cell.value).strip()
+                        if mssv_str in score_map:
+                            thangdiem4_cell = worksheet.cell(row=row, column=thangdiem4_col)
+                            # Ghi điểm đã được làm tròn đến 1 chữ số thập phân
+                            thangdiem4_cell.value = score_map[mssv_str]
+                            updated_count += 1
+                            logger.debug(f"Updated MSSV {mssv_str}: {score_map[mssv_str]}")
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Could not process MSSV at row {row}: {e}")
+                        continue
+            
+            logger.info(f"Updated scores for {updated_count}/{len(score_map)} students")
+            
+            # Tạo file output mới với timestamp
+            timestamp = pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"ketqua_chamthi_{timestamp}.xlsx"
+            output_dir = os.path.join('uploads', 'results')
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, output_filename)
+            
+            # Lưu workbook với tất cả formatting gốc
+            workbook.save(output_path)
+            
+            logger.info(f"Saved updated Excel file with original formatting: {output_path}")
+            
+            return {
+                'message': f'Đã xuất kết quả vào file Excel gốc với đầy đủ format!',
+                'filename': output_filename,
+                'output_path': output_path,
+                'updated_count': updated_count,
+                'total_students': len(results),
+                'mssv_column': mssv_col,
+                'thangdiem4_column': thangdiem4_col
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing Excel file: {str(e)}")
+            return JSONResponse({'error': f'Error processing Excel file: {str(e)}'}, status_code=500)
+        
+    except Exception as e:
+        logger.error(f"Error in export_to_original_excel: {str(e)}")
+        return JSONResponse({'error': f'Error exporting to Excel: {str(e)}'}, status_code=500)
+
+# Download result Excel file
+@router.get('/api/download_result_excel/{filename}')
+async def download_result_excel(filename: str):
+    try:
+        file_path = os.path.join('uploads', 'results', filename)
+        if not os.path.exists(file_path):
+            return JSONResponse({'error': 'Result file not found'}, status_code=404)
+        return FileResponse(
+            file_path, 
+            filename=filename, 
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+    except Exception as e:
+        logger.error(f"Error downloading result file {filename}: {str(e)}")
+        return JSONResponse({'error': 'Error downloading file'}, status_code=500)

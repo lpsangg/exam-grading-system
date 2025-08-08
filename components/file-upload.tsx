@@ -50,16 +50,16 @@ export function FileUpload({ onFileSelect, accept, disabled, title, description 
 
   return (
     <div
-      className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+      className={`border-2 border-dashed rounded-lg p-4 sm:p-8 text-center transition-colors ${
         isDragOver ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-gray-400"
       } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
     >
-      <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-gray-600 mb-4">{description}</p>
+      <FileText className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400 mx-auto mb-3 sm:mb-4" />
+      <h3 className="text-base sm:text-lg font-semibold mb-2">{title}</h3>
+      <p className="text-sm sm:text-base text-gray-600 mb-3 sm:mb-4 px-2">{description}</p>
 
       <div>
         <input
@@ -72,7 +72,7 @@ export function FileUpload({ onFileSelect, accept, disabled, title, description 
         />
         <label 
           htmlFor="file-upload" 
-          className={`inline-block px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`inline-block w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
           <Upload className="w-4 h-4 mr-2 inline" />
           Chọn File

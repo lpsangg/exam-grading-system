@@ -104,6 +104,17 @@ export default function Step4Page() {
     })
   }
 
+  // Function to calculate correct answers count
+  const getCorrectAnswersCount = (answers: string[]): number => {
+    return answers ? answers.filter(answer => answer && answer !== '' && answer !== 'X').length : 0
+  }
+
+  // Function to convert score to 10-point scale
+  const convertToTenPointScale = (correctAnswers: number, totalQuestions: number): number => {
+    if (totalQuestions === 0) return 0
+    return (correctAnswers / totalQuestions) * 10
+  }
+
   const handleSaveEdit = async () => {
     if (!editingResult) return
 
@@ -170,72 +181,169 @@ export default function Step4Page() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
         <StepNavigation currentStep={4} />
 
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-6 h-6" />
+        <Card className="mt-4 sm:mt-8">
+          <CardHeader className="pb-4 sm:pb-6">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+              <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6" />
               Bước 4: Xem Lại & Chỉnh Sửa
             </CardTitle>
-            <CardDescription>Kiểm tra kết quả chấm sơ bộ và chỉnh sửa các lỗi nhận dạng nếu cần</CardDescription>
+            <CardDescription className="text-sm sm:text-base">
+              Kiểm tra kết quả chấm sơ bộ và chỉnh sửa các lỗi nhận dạng nếu cần
+            </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            {!results || results.length === 0 ? (
+          <CardContent className="space-y-4 sm:space-y-6">{!results || results.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Đang tải dữ liệu...</p>
-                <p className="text-sm text-gray-400 mt-2">
+                <p className="text-xs sm:text-sm text-gray-400 mt-2">
                   examResults: {examResults?.length || 0} items, 
                   results: {results?.length || 0} items
                 </p>
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-5 h-5 text-green-600" />
-                  <span className="font-semibold text-green-800">Thành công</span>
-                </div>
-                <p className="text-2xl font-bold text-green-600 mt-1">
-                  {results.filter((r) => r.status === "success").length}
-                </p>
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="bg-green-50 p-3 sm:p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                      <span className="font-semibold text-green-800 text-sm sm:text-base">Thành công</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl font-bold text-green-600 mt-1">
+                      {results.filter((r) => r.status === "success").length}
+                    </p>
+                  </div>
 
-              <div className="bg-yellow-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-yellow-600" />
-                  <span className="font-semibold text-yellow-800">Cần kiểm tra</span>
-                </div>
-                <p className="text-2xl font-bold text-yellow-600 mt-1">
-                  {results.filter((r) => r.status === "warning").length}
-                </p>
-              </div>
+                  <div className="bg-yellow-50 p-3 sm:p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
+                      <span className="font-semibold text-yellow-800 text-sm sm:text-base">Cần kiểm tra</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl font-bold text-yellow-600 mt-1">
+                      {results.filter((r) => r.status === "warning").length}
+                    </p>
+                  </div>
 
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
-                  <span className="font-semibold text-blue-800">Tổng số</span>
+                  <div className="bg-blue-50 p-3 sm:p-4 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
+                      <span className="font-semibold text-blue-800 text-sm sm:text-base">Tổng số</span>
+                    </div>
+                    <p className="text-xl sm:text-2xl font-bold text-blue-600 mt-1">{results.length}</p>
+                  </div>
                 </div>
-                <p className="text-2xl font-bold text-blue-600 mt-1">{results.length}</p>
-              </div>
-            </div>
 
-            <div className="border rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Ảnh Gốc</TableHead>
-                    <TableHead>Tên Sinh Viên</TableHead>
-                    <TableHead>MSSV</TableHead>
-                    <TableHead>Mã Đề</TableHead>
-                    <TableHead>STT</TableHead>
-                    <TableHead>Điểm</TableHead>
-                    <TableHead>Trạng Thái</TableHead>
-                    <TableHead>Hành Động</TableHead>
-                  </TableRow>
+                {/* Mobile Card View */}
+                <div className="sm:hidden space-y-4">
+                  {results.map((result, index) => (
+                    <Card key={index} className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(result.status)}
+                          {getStatusBadge(result.status)}
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <span className="text-gray-500">Tên:</span>
+                            <div className="font-medium">{result.name || "N/A"}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">MSSV:</span>
+                            <div className="font-mono">{result.recognizedStudentId}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Mã đề:</span>
+                            <div className="font-mono">{result.recognizedExamCode}</div>
+                          </div>
+                          <div>
+                            <span className="text-gray-500">Điểm:</span>
+                            <div className="font-bold text-blue-600">{convertToTenPointScale(result.score).toFixed(1)}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" className="flex-1">
+                                <Eye className="w-4 h-4 mr-1" />
+                                Xem
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-y-auto">
+                              <DialogHeader>
+                                <DialogTitle className="text-base">Chi tiết kết quả</DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                  <div><span className="text-gray-500">Tên:</span> {result.name || "N/A"}</div>
+                                  <div><span className="text-gray-500">MSSV:</span> {result.recognizedStudentId}</div>
+                                  <div><span className="text-gray-500">Mã đề:</span> {result.recognizedExamCode}</div>
+                                  <div><span className="text-gray-500">STT:</span> {result.indexStudent || "N/A"}</div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                  <div className="text-sm font-medium">Ảnh gốc:</div>
+                                  <div className="relative w-full h-40 bg-gray-100 rounded">
+                                    <Image
+                                      src={`http://localhost:5000/api/images/${result.imageUrl}`}
+                                      alt="Ảnh gốc"
+                                      fill
+                                      className="object-contain rounded"
+                                      onError={() => console.error('Error loading image:', result.imageUrl)}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                  <div className="text-sm font-medium">Ảnh đã xử lý:</div>
+                                  <div className="relative w-full h-40 bg-gray-100 rounded">
+                                    <Image
+                                      src={`http://localhost:5000/api/processed_images/${result.imageName}/table_grading_bounding_box_with_bboxes.jpg`}
+                                      alt="Ảnh xử lý"
+                                      fill
+                                      className="object-contain rounded"
+                                      onError={() => console.error('Error loading processed image')}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEdit(result)}
+                            className="flex-1"
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Sửa
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden sm:block border rounded-lg overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-xs lg:text-sm">Ảnh Gốc</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Tên Sinh Viên</TableHead>
+                          <TableHead className="text-xs lg:text-sm">MSSV</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Mã Đề</TableHead>
+                          <TableHead className="text-xs lg:text-sm">STT</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Câu đúng</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Điểm</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Trạng Thái</TableHead>
+                          <TableHead className="text-xs lg:text-sm">Hành Động</TableHead>
+                        </TableRow>
                 </TableHeader>
                 <TableBody>
                   {results.map((result, idx) => (
@@ -290,10 +398,14 @@ export default function Step4Page() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className="font-semibold">{result.score.toFixed(1)}</span>
-                        {result.numQuestions && (
-                          <span className="text-gray-500 text-sm ml-1">/{result.numQuestions}</span>
-                        )}
+                        <span className="font-semibold">
+                          {result.score}/{result.numQuestions || 0}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-semibold">
+                          {convertToTenPointScale(result.score, result.numQuestions || 0).toFixed(1)}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-2">
@@ -330,14 +442,14 @@ export default function Step4Page() {
                               Xem & Sửa
                             </Button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                          <DialogContent className="max-w-[95vw] sm:max-w-6xl max-h-[90vh] overflow-y-auto">
                             <DialogHeader>
-                              <DialogTitle>Chỉnh sửa kết quả - {result.imageName}</DialogTitle>
+                              <DialogTitle className="text-base sm:text-lg">Chỉnh sửa kết quả - {result.imageName}</DialogTitle>
                             </DialogHeader>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">{/* Ảnh bài làm */}
                               <div>
-                                <h3 className="font-semibold mb-2">Ảnh bài làm:</h3>
+                                <h3 className="font-semibold mb-2 text-sm sm:text-base">Ảnh bài làm:</h3>
                                 <div className="border rounded-lg overflow-hidden">
                                   <Image
                                     src={result.imageUrl || "/placeholder.svg"}
@@ -349,7 +461,8 @@ export default function Step4Page() {
                                 </div>
                               </div>
 
-                              <div className="space-y-4">
+                              {/* Form chỉnh sửa */}
+                              <div className="space-y-3 sm:space-y-4">
                                 <div>
                                   <Label htmlFor="student-select">MSSV</Label>
                                   <Select
@@ -467,12 +580,12 @@ export default function Step4Page() {
               </Table>
             </div>
 
-            <div className="flex justify-between">
-              <Button variant="outline" onClick={handleBack}>
-                Quay Lại
-              </Button>
-              <Button onClick={handleNext}>Xác Nhận & Xuất File</Button>
-            </div>
+                <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
+                  <Button variant="outline" onClick={handleBack} className="w-full sm:w-auto">
+                    Quay Lại
+                  </Button>
+                  <Button onClick={handleNext} className="w-full sm:w-auto">Xác Nhận & Xuất File</Button>
+                </div>
             </>
             )}
           </CardContent>
