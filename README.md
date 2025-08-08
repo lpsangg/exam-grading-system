@@ -21,7 +21,7 @@ Import danh sách sinh viên từ file Excel, tự động phân chia phòng thi
 Upload và xử lý đồng thời nhiều ảnh bài làm của sinh viên.
 
 **Nhận dạng bằng AI**  
-Tự động trích xuất Mã số sinh viên (MSSV), Mã đề, và các câu trả lời từ ảnh chụp bài làm bằng công nghệ AI (sử dụng Ollama).
+Tự động trích xuất Mã số sinh viên (MSSV), Mã đề làm bằng công nghệ AI (sử dụng Ollama) và các câu trả lời từ ảnh chụp bài làm bằng công nghệ YOLO.
 
 **Chấm điểm tự động**  
 Đối chiếu câu trả lời của sinh viên với đáp án tương ứng của mã đề để tính điểm chính xác.
