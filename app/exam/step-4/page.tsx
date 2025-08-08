@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -50,12 +50,6 @@ export default function Step4Page() {
     }
   }, [examResults])
 
-  // Debug log answerKeys
-  useEffect(() => {
-    console.log('📊 Step-4: Available answerKeys:', answerKeys)
-    console.log('📊 Step-4: Available exam codes:', examCodes)
-  }, [answerKeys, examCodes])
-
   // Debug log khi results thay đổi
   useEffect(() => {
     console.log('📊 Step-4: Current results state:', results)
@@ -82,6 +76,11 @@ export default function Step4Page() {
 
   const handleEdit = (result: ExamResult) => {
     setEditingResult(result)
+    updateEditForm(result)
+  }
+
+  const updateEditForm = (result: ExamResult) => {
+    console.log('🔄 Updating edit form with result:', result)
     // Đảm bảo mảng answers có đúng độ dài
     const numQuestions = result.numQuestions || 40 // default 40 questions
     const answers = result.answers || []
@@ -90,13 +89,35 @@ export default function Step4Page() {
       paddedAnswers.push("")
     }
     
-    setEditForm({
+    const newEditForm = {
       studentId: result.recognizedStudentId,
       examCode: result.recognizedExamCode,
       name: result.name || "",
       answers: paddedAnswers.slice(0, numQuestions), // Cắt về đúng số câu
-    })
+    }
+    
+    console.log('🔄 New edit form:', newEditForm)
+    setEditForm(newEditForm)
   }
+
+  // Cập nhật editForm khi editingResult thay đổi (sau khi lưu)
+  useEffect(() => {
+    console.log('🔍 EditingResult or results changed:', {
+      editingResult: editingResult?.id,
+      resultsLength: results.length,
+      hasEditingResult: !!editingResult
+    })
+    
+    if (editingResult) {
+      // Tìm result đã được cập nhật từ results state
+      const updatedResult = results.find(r => r.id === editingResult.id)
+      console.log('🔍 Found updated result:', updatedResult?.id, 'answers length:', updatedResult?.answers?.length)
+      
+      if (updatedResult) {
+        updateEditForm(updatedResult)
+      }
+    }
+  }, [editingResult, results])
 
   const handleAnswerChange = (questionIndex: number) => {
     const currentAnswer = editForm.answers[questionIndex] || ""
@@ -114,16 +135,8 @@ export default function Step4Page() {
 
   // Function to calculate correct answers count by comparing with answer key
   const getCorrectAnswersCount = (studentAnswers: string[], examCode: string): number => {
-    // Add comprehensive validation checks
-    if (!studentAnswers || studentAnswers.length === 0) {
-      return 0
-    }
-    
-    if (!examCode || examCode === '') {
-      return 0
-    }
-    
-    if (!answerKeys || Object.keys(answerKeys).length === 0) {
+    if (!studentAnswers || !examCode) {
+      console.warn('Missing student answers or exam code')
       return 0
     }
 
@@ -153,19 +166,32 @@ export default function Step4Page() {
     return (correctAnswers / totalQuestions) * 10
   }
 
-  // Safe score calculation wrapper for editForm display
-  const getSafeCurrentScore = (): { correct: number; total: number; score: number } => {
-    // Return zeros if no editing result is selected or form is not initialized
-    if (!editingResult || !editForm.answers || editForm.answers.length === 0 || !editForm.examCode) {
-      return { correct: 0, total: 0, score: 0 }
-    }
+  // Function to check if a student ID is duplicated
+  const getDuplicatedStudentIds = (): Set<string> => {
+    const studentIdCounts = new Map<string, number>()
     
-    const correct = getCorrectAnswersCount(editForm.answers, editForm.examCode)
-    const total = answerKeys[editForm.examCode]?.length || editForm.answers.length || 0
-    const score = convertToTenPointScale(correct, total)
+    // Count occurrences of each student ID
+    results.forEach(result => {
+      if (result.recognizedStudentId && result.recognizedStudentId.trim() !== '') {
+        const studentId = result.recognizedStudentId
+        studentIdCounts.set(studentId, (studentIdCounts.get(studentId) || 0) + 1)
+      }
+    })
     
-    return { correct, total, score }
+    // Return set of duplicated student IDs
+    const duplicatedIds = new Set<string>()
+    studentIdCounts.forEach((count, studentId) => {
+      if (count > 1) {
+        duplicatedIds.add(studentId)
+      }
+    })
+    
+    console.log('🔍 Duplicated Student IDs:', Array.from(duplicatedIds))
+    return duplicatedIds
   }
+
+  // Get duplicated student IDs
+  const duplicatedStudentIds = getDuplicatedStudentIds()
 
   const handleSaveEdit = async () => {
     if (!editingResult) return
@@ -176,6 +202,8 @@ export default function Step4Page() {
 
       // Calculate score based on answer key comparison
       const newScore = getCorrectAnswersCount(editForm.answers, editForm.examCode)
+      
+      console.log('💾 Saving edit with score:', newScore, 'answers:', editForm.answers)
 
       // Update the local results
       const updatedResults = results.map((result) =>
@@ -211,8 +239,15 @@ export default function Step4Page() {
       
       setExamResults(updatedExamResults)
 
-      setEditingResult(null)
+      // Don't close the editing dialog immediately, let user see the updated results
       toast.success("Đã cập nhật thông tin và điểm số thành công!")
+      
+      // Update the editingResult with new data to trigger form refresh
+      const updatedEditingResult = updatedResults.find(r => r.id === editingResult.id)
+      if (updatedEditingResult) {
+        setEditingResult(updatedEditingResult)
+      }
+      
     } catch (error) {
       toast.error("Có lỗi xảy ra khi cập nhật")
     }
@@ -323,12 +358,18 @@ export default function Step4Page() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {results.map((result, idx) => (
-                        <TableRow key={`${result.id}-${result.imageName}-${idx}`} className={
-                          result.correctionStatus === 'exact_match' ? '' :
-                          result.correctionStatus === 'auto_corrected' ? 'bg-yellow-50' :
-                          'bg-red-50'
-                        }>
+                      {results.map((result, idx) => {
+                        // Check if this student ID is duplicated
+                        const isDuplicatedStudentId = duplicatedStudentIds.has(result.recognizedStudentId)
+                        
+                        return (
+                          <TableRow key={`${result.id}-${result.imageName}-${idx}`} className={
+                            isDuplicatedStudentId ? 'bg-red-50' : // Trùng lặp MSSV -> màu đỏ
+                            result.correctionStatus === 'exact_match' ? 'bg-white' :
+                            result.correctionStatus === 'auto_corrected' ? 'bg-yellow-50' :
+                            result.correctionStatus === 'no_match' ? 'bg-red-50' :
+                            'bg-white' // Default màu trắng cho các trường hợp khác
+                          }>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               {result.correctionStatus === 'exact_match' && (
@@ -339,6 +380,18 @@ export default function Step4Page() {
                               )}
                               {result.correctionStatus === 'no_match' && (
                                 <X className="h-4 w-4 text-red-500" />
+                              )}
+                              {isDuplicatedStudentId && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <AlertTriangle className="h-4 w-4 text-red-600" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>MSSV trùng lặp: {result.recognizedStudentId}</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               )}
                               <span className="font-mono text-sm">{result.imageName}</span>
                             </div>
@@ -388,23 +441,31 @@ export default function Step4Page() {
                             <div className="flex items-center space-x-2">
                               <Badge 
                                 variant={
+                                  isDuplicatedStudentId ? 'destructive' :
                                   result.correctionStatus === 'exact_match' ? 'default' :
                                   result.correctionStatus === 'auto_corrected' ? 'secondary' : 
                                   'destructive'
                                 }
                               >
-                                {result.correctionStatus === 'exact_match' && 'Chính xác'}
-                                {result.correctionStatus === 'auto_corrected' && 'Đã sửa'}
-                                {result.correctionStatus === 'no_match' && 'Cần kiểm tra'}
+                                {isDuplicatedStudentId && 'MSSV trùng lặp'}
+                                {!isDuplicatedStudentId && result.correctionStatus === 'exact_match' && 'Chính xác'}
+                                {!isDuplicatedStudentId && result.correctionStatus === 'auto_corrected' && 'Đã sửa'}
+                                {!isDuplicatedStudentId && result.correctionStatus === 'no_match' && 'Cần kiểm tra'}
+                                {!isDuplicatedStudentId && !result.correctionStatus && 'Không xác định'}
                               </Badge>
-                              {result.correctionReason && (
+                              {(result.correctionReason || isDuplicatedStudentId) && (
                                 <TooltipProvider>
                                   <Tooltip>
                                     <TooltipTrigger asChild>
                                       <Info className="h-4 w-4 text-gray-400 cursor-help" />
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      <p className="max-w-xs">{result.correctionReason}</p>
+                                      <p className="max-w-xs">
+                                        {isDuplicatedStudentId 
+                                          ? `Có ${Array.from(results.filter(r => r.recognizedStudentId === result.recognizedStudentId)).length} bài thi có cùng MSSV: ${result.recognizedStudentId}`
+                                          : result.correctionReason
+                                        }
+                                      </p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
@@ -496,96 +557,105 @@ export default function Step4Page() {
                                       <div className="flex justify-between items-center mb-2">
                                         <Label>Đáp án của bài thi</Label>
                                         <div className="text-sm bg-blue-50 px-2 py-1 rounded">
-                                          {(() => {
-                                            const currentScore = getSafeCurrentScore()
-                                            return (
-                                              <>
-                                                <span className="font-semibold">Điểm hiện tại: </span>
-                                                <span className="text-blue-600 font-bold">
-                                                  {currentScore.correct}/{currentScore.total}
-                                                </span>
-                                                <span className="text-gray-500 text-xs ml-2">
-                                                  (={currentScore.score.toFixed(1)} điểm)
-                                                </span>
-                                              </>
-                                            )
-                                          })()}
+                                          <span className="font-semibold">Điểm hiện tại: </span>
+                                          <span className="text-blue-600 font-bold">
+                                            {getCorrectAnswersCount(editForm.answers, editForm.examCode)}/
+                                            {answerKeys[editForm.examCode]?.length || editForm.answers.length}
+                                          </span>
+                                          <span className="text-gray-500 text-xs ml-2">
+                                            (={convertToTenPointScale(
+                                              getCorrectAnswersCount(editForm.answers, editForm.examCode), 
+                                              answerKeys[editForm.examCode]?.length || editForm.answers.length
+                                            ).toFixed(1)} điểm)
+                                          </span>
                                         </div>
                                       </div>
-                                      <div className="mt-2 p-3 border rounded-md bg-gray-50 max-h-64 overflow-y-auto">
-                                        <div className="grid grid-cols-5 gap-2">
-                                          {editingResult && editForm.answers && editForm.answers.length > 0 ? 
-                                            editForm.answers.map((answer, index) => {
+                                      
+                                      {editForm.answers && editForm.answers.length > 0 ? (
+                                        <div className="mt-2 p-3 border rounded-md bg-gray-50 max-h-64 overflow-y-auto">
+                                          <div className="grid grid-cols-5 gap-2">
+                                            {editForm.answers.map((answer, index) => {
                                               const correctAnswer = answerKeys[editForm.examCode]?.[index]
                                               const isCorrect = answer && answer !== '' && answer !== 'X' && answer === correctAnswer
                                               const isIncorrect = answer && answer !== '' && answer !== 'X' && correctAnswer && answer !== correctAnswer
-                                            
-                                            return (
-                                              <div key={index} className="flex flex-col items-center">
-                                                <span className="text-xs text-gray-600 mb-1">
-                                                  Câu {index + 1}
-                                                  {correctAnswer && (
-                                                    <span className="ml-1 text-green-600 font-medium">({correctAnswer})</span>
-                                                  )}
-                                                </span>
-                                                <button
-                                                  type="button"
-                                                  onClick={() => handleAnswerChange(index)}
-                                                  className={`w-8 h-8 rounded border-2 text-sm font-medium transition-colors ${
-                                                    isCorrect ? "bg-green-500 text-white border-green-500 ring-2 ring-green-200" :
-                                                    isIncorrect ? "bg-red-500 text-white border-red-500 ring-2 ring-red-200" :
-                                                    answer === "A" ? "bg-blue-500 text-white border-blue-500" :
-                                                    answer === "B" ? "bg-green-500 text-white border-green-500" :
-                                                    answer === "C" ? "bg-yellow-500 text-white border-yellow-500" :
-                                                    answer === "D" ? "bg-red-500 text-white border-red-500" :
-                                                    answer === "X" ? "bg-gray-500 text-white border-gray-500" :
-                                                    "bg-white border-gray-300 hover:border-gray-400"
-                                                  }`}
-                                                >
-                                                  {answer || "?"}
-                                                </button>
-                                              </div>
-                                            )
-                                          }) : (
-                                            <div className="col-span-5 text-center text-gray-500 py-4">
-                                              Chưa có dữ liệu đáp án
+                                              
+                                              return (
+                                                <div key={index} className="flex flex-col items-center">
+                                                  <span className="text-xs text-gray-600 mb-1">
+                                                    Câu {index + 1}
+                                                    {correctAnswer && (
+                                                      <span className="ml-1 text-green-600 font-medium">({correctAnswer})</span>
+                                                    )}
+                                                  </span>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleAnswerChange(index)}
+                                                    className={`w-8 h-8 rounded border-2 text-sm font-medium transition-colors ${
+                                                      isCorrect ? "bg-green-500 text-white border-green-500 ring-2 ring-green-200" :
+                                                      isIncorrect ? "bg-red-500 text-white border-red-500 ring-2 ring-red-200" :
+                                                      answer === "A" ? "bg-blue-500 text-white border-blue-500" :
+                                                      answer === "B" ? "bg-green-500 text-white border-green-500" :
+                                                      answer === "C" ? "bg-yellow-500 text-white border-yellow-500" :
+                                                      answer === "D" ? "bg-red-500 text-white border-red-500" :
+                                                      answer === "X" ? "bg-gray-500 text-white border-gray-500" :
+                                                      "bg-white border-gray-300 hover:border-gray-400"
+                                                    }`}
+                                                  >
+                                                    {answer || "?"}
+                                                  </button>
+                                                </div>
+                                              )
+                                            })}
+                                          </div>
+                                          <div className="mt-3 text-xs text-gray-600">
+                                            <p>Click vào ô đáp án để thay đổi:</p>
+                                            <div className="flex gap-2 mt-1 flex-wrap">
+                                              <span className="inline-flex items-center gap-1">
+                                                <div className="w-4 h-4 bg-blue-500 rounded"></div>A
+                                              </span>
+                                              <span className="inline-flex items-center gap-1">
+                                                <div className="w-4 h-4 bg-green-500 rounded"></div>B
+                                              </span>
+                                              <span className="inline-flex items-center gap-1">
+                                                <div className="w-4 h-4 bg-yellow-500 rounded"></div>C
+                                              </span>
+                                              <span className="inline-flex items-center gap-1">
+                                                <div className="w-4 h-4 bg-red-500 rounded"></div>D
+                                              </span>
+                                              <span className="inline-flex items-center gap-1">
+                                                <div className="w-4 h-4 bg-gray-500 rounded"></div>X (Không đáp án)
+                                              </span>
                                             </div>
-                                          )}
-                                        </div>
-                                        <div className="mt-3 text-xs text-gray-600">
-                                          <p>Click vào ô đáp án để thay đổi:</p>
-                                          <div className="flex gap-2 mt-1 flex-wrap">
-                                            <span className="inline-flex items-center gap-1">
-                                              <div className="w-4 h-4 bg-blue-500 rounded"></div>A
-                                            </span>
-                                            <span className="inline-flex items-center gap-1">
-                                              <div className="w-4 h-4 bg-green-500 rounded"></div>B
-                                            </span>
-                                            <span className="inline-flex items-center gap-1">
-                                              <div className="w-4 h-4 bg-yellow-500 rounded"></div>C
-                                            </span>
-                                            <span className="inline-flex items-center gap-1">
-                                              <div className="w-4 h-4 bg-red-500 rounded"></div>D
-                                            </span>
-                                            <span className="inline-flex items-center gap-1">
-                                              <div className="w-4 h-4 bg-gray-500 rounded"></div>X (Không đáp án)
-                                            </span>
-                                          </div>
-                                          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
-                                            <p className="text-xs">
-                                              💡 <strong>Hướng dẫn:</strong> Đáp án đúng được tô xanh lá có viền sáng, 
-                                              đáp án sai được tô đỏ có viền sáng. Đáp án chuẩn hiển thị trong ngoặc ở mỗi câu.
-                                            </p>
+                                            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-blue-800">
+                                              <p className="text-xs">
+                                                💡 <strong>Hướng dẫn:</strong> Đáp án đúng được tô xanh lá có viền sáng, 
+                                                đáp án sai được tô đỏ có viền sáng. Đáp án chuẩn hiển thị trong ngoặc ở mỗi câu.
+                                              </p>
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
+                                      ) : (
+                                        <div className="mt-2 p-4 border rounded-md bg-gray-50 text-center text-gray-500">
+                                          <p>Chưa có dữ liệu đáp án</p>
+                                          <p className="text-xs mt-1">Vui lòng kiểm tra dữ liệu bài thi</p>
+                                        </div>
+                                      )}
                                     </div>
 
-                                    <div className="pt-4">
-                                      <Button onClick={handleSaveEdit} className="w-full">
+                                    <div className="flex gap-2 pt-4">
+                                      <Button onClick={handleSaveEdit} className="flex-1">
                                         <Edit className="w-4 h-4 mr-2" />
                                         Lưu Thay Đổi
                                       </Button>
+                                      <DialogClose asChild>
+                                        <Button 
+                                          variant="outline" 
+                                          onClick={() => setEditingResult(null)}
+                                          className="px-4"
+                                        >
+                                          Đóng
+                                        </Button>
+                                      </DialogClose>
                                     </div>
                                   </div>
                                 </div>
@@ -593,7 +663,8 @@ export default function Step4Page() {
                             </Dialog>
                           </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
