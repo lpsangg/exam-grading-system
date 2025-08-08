@@ -58,34 +58,56 @@ async def upload_answer_key(file: UploadFile = File(...)):
         
         logger.info("File saved successfully")
         
-        # Đọc file Excel để lấy exam codes
+        # Đọc file Excel để lấy exam codes và answer keys
         import io
         try:
             df = pd.read_excel(io.BytesIO(content))
             logger.info(f"Excel file read successfully. Shape: {df.shape}")
             logger.info(f"Columns: {list(df.columns)}")
             
-            # Lấy mã đề từ cột đầu tiên (bỏ qua NaN)
+            # Lấy mã đề và đáp án
             exam_codes = []
+            answer_keys = {}
+            
             if not df.empty:
-                # Lấy cột đầu tiên và loại bỏ NaN
+                # Lấy cột đầu tiên cho exam codes
                 first_col = df.iloc[:, 0].dropna()
                 
-                # Chuyển thành string và loại bỏ .0 ở cuối (nếu có)
-                exam_codes = []
-                for value in first_col:
+                for index, value in enumerate(first_col):
                     if pd.notna(value):
                         str_value = str(value).replace('.0', '')
                         # Chỉ lấy những giá trị là số (mã đề)
                         if str_value.isdigit() or (str_value.replace('.', '').isdigit()):
                             exam_codes.append(str_value)
+                            
+                            # Lấy đáp án cho mã đề này (từ cột thứ 2 trở đi)
+                            if index < len(df):
+                                answers = []
+                                # Lấy đáp án từ các cột từ 1 trở đi (bỏ qua cột 0 là exam code)
+                                for col_idx in range(1, len(df.columns)):
+                                    if index < len(df):
+                                        answer_val = df.iloc[index, col_idx]
+                                        if pd.notna(answer_val):
+                                            answer_str = str(answer_val).strip().upper()
+                                            # Chỉ lấy A, B, C, D
+                                            if answer_str in ['A', 'B', 'C', 'D']:
+                                                answers.append(answer_str)
+                                            else:
+                                                answers.append('')  # Empty answer for invalid values
+                                        else:
+                                            answers.append('')  # Empty answer for NaN
+                                
+                                answer_keys[str_value] = answers
+                                logger.info(f"Exam code {str_value}: {len(answers)} answers")
                 
                 logger.info(f"Found exam codes: {exam_codes}")
+                logger.info(f"Answer keys sample: {dict(list(answer_keys.items())[:2])}")  # Show first 2 for debugging
             
             return { 
                 'message': 'Tải lên đáp án thành công!', 
                 'filename': filename,
-                'examCodes': exam_codes
+                'examCodes': exam_codes,
+                'answerKeys': answer_keys
             }
                 
         except Exception as excel_error:

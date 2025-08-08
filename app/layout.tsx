@@ -29,7 +29,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" suppressHydrationWarning>
-      <body className={inter.className}>
+      <head>
+        <meta name="theme-color" content="#ffffff" />
+      </head>
+      <body className={inter.className} suppressHydrationWarning>
         {children}
         <ToasterWrapper />
       </body>

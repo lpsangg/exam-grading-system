@@ -9,6 +9,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // CSS optimization with critters module
+  experimental: {
+    optimizeCss: true,
+  },
   webpack: (config, { isServer }) => {
     // Fix webpack module resolution
     config.resolve.fallback = {
