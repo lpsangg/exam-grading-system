@@ -16,6 +16,10 @@ interface Student {
   stt: number
   mssv: string
   hoTen: string
+  ho?: string
+  ten?: string
+  name?: string
+  fullName?: string
 }
 
 export default function Step2Page() {
@@ -49,6 +53,7 @@ export default function Step2Page() {
       
       if (res.ok) {
         setStudentFile(file)
+        console.log('📊 Raw student data from backend:', data.students)
         setStudents(data.students || [])
         setStudentCount(data.studentCount || 0)
         
@@ -98,21 +103,19 @@ export default function Step2Page() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         <StepNavigation currentStep={2} />
 
-        <Card className="mt-4 sm:mt-8">
-          <CardHeader className="pb-4 sm:pb-6">
-            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
-              <Users className="w-5 h-5 sm:w-6 sm:h-6" />
+        <Card className="mt-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="w-6 h-6" />
               Bước 2: Tải Lên Danh Sách Lớp
             </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
-              Tải lên file Excel chứa danh sách sinh viên. File phải có định dạng .xlsx
-            </CardDescription>
+            <CardDescription>Tải lên file Excel chứa danh sách sinh viên. File phải có định dạng .xlsx</CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 sm:space-y-6">
+          <CardContent className="space-y-6">
             <FileUpload
               onFileSelect={handleFileUpload}
               accept=".xlsx"
@@ -135,7 +138,7 @@ export default function Step2Page() {
                 ) : (
                   <AlertCircle className="h-4 w-4 text-red-600" />
                 )}
-                <AlertDescription className={`${uploadResult.success ? "text-green-800" : "text-red-800"} text-sm sm:text-base`}>
+                <AlertDescription className={uploadResult.success ? "text-green-800" : "text-red-800"}>
                   {uploadResult.message}
                   {uploadResult.studentCount && (
                     <div className="mt-1">
@@ -147,43 +150,48 @@ export default function Step2Page() {
             )}
 
             {students.length > 0 && (
-              <div className="space-y-3 sm:space-y-4">
-                <h3 className="text-base sm:text-lg font-semibold">Xem trước danh sách sinh viên:</h3>
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Xem trước danh sách sinh viên:</h3>
                 <div className="border rounded-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-16 text-xs sm:text-sm">STT</TableHead>
-                          <TableHead className="text-xs sm:text-sm">MSSV</TableHead>
-                          <TableHead className="text-xs sm:text-sm">Họ và Tên</TableHead>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-16">STT</TableHead>
+                        <TableHead>MSSV</TableHead>
+                        <TableHead>Họ và Tên</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {students.slice(0, 5).map((student) => {
+                        console.log('Student data:', student)
+                        return (
+                        <TableRow key={student.stt}>
+                          <TableCell>{student.stt}</TableCell>
+                          <TableCell className="font-mono">{student.mssv}</TableCell>
+                          <TableCell>
+                            {student.hoTen || student.fullName || student.name || 
+                             (student.ho && student.ten ? `${student.ho} ${student.ten}` : 
+                             student.ho || student.ten || 'N/A')}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {students.slice(0, 5).map((student) => (
-                          <TableRow key={student.stt}>
-                            <TableCell className="text-xs sm:text-sm">{student.stt}</TableCell>
-                            <TableCell className="font-mono text-xs sm:text-sm">{student.mssv}</TableCell>
-                            <TableCell className="text-xs sm:text-sm">{student.hoTen}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
                 {students.length > 5 && (
-                  <p className="text-xs sm:text-sm text-gray-600 text-center">
+                  <p className="text-sm text-gray-600 text-center">
                     Hiển thị 5 sinh viên đầu tiên. Tổng cộng: {students.length} sinh viên
                   </p>
                 )}
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0">
-              <Button variant="outline" onClick={handleBack} className="w-full sm:w-auto">
+            <div className="flex justify-between">
+              <Button variant="outline" onClick={handleBack}>
                 Quay Lại
               </Button>
-              <Button onClick={handleNext} disabled={!uploadResult?.success} className="w-full sm:w-auto">
+              <Button onClick={handleNext} disabled={!uploadResult?.success}>
                 Tiếp Tục
               </Button>
             </div>

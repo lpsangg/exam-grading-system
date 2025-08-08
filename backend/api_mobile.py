@@ -173,10 +173,17 @@ async def upload_student_list(file: UploadFile = File(...)):
             students = []
             for part_key, part_df in result['df_parts'].items():
                 for _, row in part_df.iterrows():
+                    # Tạo họ tên đầy đủ từ HoDem và Ten
+                    ho_dem = str(row.get('HoDem', '')).strip() if 'HoDem' in part_df.columns else ''
+                    ten = str(row.get('Ten', '')).strip() if 'Ten' in part_df.columns else ''
+                    ho_ten_day_du = f"{ho_dem} {ten}".strip() if ho_dem and ten else (ho_dem or ten or '')
+                    
                     student = {
                         'stt': int(row['STT']),
                         'mssv': str(row['MSSV']),
-                        'hoTen': str(row.get('Ten', '')) if 'Ten' in part_df.columns else ''
+                        'hoTen': ho_ten_day_du,
+                        'hoDem': ho_dem,
+                        'ten': ten
                     }
                     students.append(student)
             
