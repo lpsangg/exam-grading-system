@@ -313,13 +313,13 @@ export default function Step4Page() {
             ) : (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
+                  <div className="bg-red-50 p-4 rounded-lg">
                     <div className="flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="font-semibold text-green-800">Thành công</span>
+                      <AlertTriangle className="w-5 h-5 text-red-600" />
+                      <span className="font-semibold text-red-800">Trùng lặp</span>
                     </div>
-                    <p className="text-2xl font-bold text-green-600 mt-1">
-                      {results.filter((r) => r.status === "success").length}
+                    <p className="text-2xl font-bold text-red-600 mt-1">
+                      {results.filter((r) => duplicatedStudentIds.has(r.recognizedStudentId)).length}
                     </p>
                   </div>
 
